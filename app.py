@@ -29,29 +29,30 @@ st.markdown("""
         .stAlertContainer ul li {
             margin-left: 5px !important;
         }
-        a,
-        .stSidebar a {
+
+        [data-testid="stSidebar"] a {
             text-decoration: none !important;
-            color: #fff !important;
+            color: var(--text-color);
             text-align: center !important;
-        }
-        .stSidebar a {
             opacity: 0.7;
         }
-        a:hover,
-        .stSidebar a:hover {
+        [data-testid="stSidebar"] a:hover {
             text-decoration: none !important;
             color: #FF4B4B !important;
+            opacity: 1;
         }
+
         .footer {
             opacity: 0.7;
-            color: #fff;
+            color: var(--text-color);
         }
         .footer a {
             text-decoration: none !important;
+            color: var(--text-color);
         }
         .footer a:hover {
             text-decoration: underline !important;
+            color: #FF4B4B !important;
         }
     </style>
 """, unsafe_allow_html=True)
@@ -360,7 +361,7 @@ if uploaded_file is not None:
         
         # Tampilkan hasil
         st.markdown("---")
-        st.markdown("### <i class='bx bxs-bar-chart-alt-2'></i> Hasil Perhitungan MOORA", unsafe_allow_html=True)
+        st.markdown("### 📊 Hasil Perhitungan MOORA")
         
         # Tampilkan bobot yang digunakan
         with st.expander("🔍 Lihat Bobot yang Digunakan"):
