@@ -22,6 +22,13 @@ st.markdown("""
         .text-primary {
             color: #FF4B4B !important;
         }
+        .stAlertContainer ul {
+            list-style-type: none !important;
+            padding-left: 0 !important;
+        }
+        .stAlertContainer ul li {
+            margin-left: 5px !important;
+        }
         a,
         .stSidebar a {
             text-decoration: none !important;
@@ -60,7 +67,7 @@ st.markdown("""
                 <tr>
                     <th class="bg-primary">Kriteria</th>
                     <th class="bg-primary">Satuan</th>
-                    <th class="bg-primary">Deskripsi</th>
+                    <th class="bg-primary text">Deskripsi</th>
                 </tr>
                 <tr>
                     <td>Name</td>
@@ -372,13 +379,14 @@ if uploaded_file is not None:
             
             # Styling untuk top 3
             def highlight_top3(row):
+                color = ''
                 if row['Ranking'] == 1:
-                    return ['background-color: #FFD700'] * len(row)
+                    color = 'background-color: #FFD700; font-weight: bold; color: #000000;'
                 elif row['Ranking'] == 2:
-                    return ['background-color: #C0C0C0'] * len(row)
+                    color = 'background-color: #C0C0C0; font-weight: bold; color: #000000;'
                 elif row['Ranking'] == 3:
-                    return ['background-color: #CD7F32'] * len(row)
-                return [''] * len(row)
+                    color = 'background-color: #CD7F32; font-weight: bold; color: #000000;'
+                return [color] * len(row)
             
             styled_df = result_df.style.apply(highlight_top3, axis=1)
             st.dataframe(styled_df, use_container_width=True)
@@ -396,11 +404,11 @@ if uploaded_file is not None:
                     
                     **{row['Name']}**
                     
-                    - Harga: Rp {row['Price']:,.0f}
-                    - Jarak: {row['Distance']} km
-                    - Ukuran: {row['Size']} m²
-                    - WiFi: {row['Wifi']} Mbps
-                    - Keamanan: {row['Security_Score']}/10
+                    - 💰 Harga: Rp{row['Price']:,.0f}k
+                    - 🚶‍♂️ Jarak: {row['Distance']} km
+                    - 📏 Ukuran: {row['Size']} m²
+                    - 🛜 WiFi: {row['Wifi']} Mbps
+                    - 🛡️ Keamanan: {row['Security_Score']}/10
                     
                     **Yi Score: {row['Yi (Score)']:.4f}**
                     """)
