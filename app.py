@@ -448,6 +448,7 @@ if uploaded_file is not None:
             st.write("**Grafik Perbandingan Yi Score:**")
             chart_data = result_df.set_index('Name')[['Yi (Score)']].sort_values('Yi (Score)', ascending=True)
             st.bar_chart(chart_data)
+            st.line_chart(chart_data)
             
             st.write("**Distribusi Kriteria Top 3:**")
             top3_criteria = result_df.head(3).set_index('Name')[criteria_cols]
