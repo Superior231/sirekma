@@ -454,17 +454,24 @@ if uploaded_file is not None:
             st.line_chart(top3_criteria.T)
             
             st.write("**Perbandingan Yi Score Top 3:**")
-            top3_yi = result_df.head(3)[['Name', 'Yi (Score)']]
-            fig, ax = plt.subplots()
-            ax.pie(
-                top3_yi['Yi (Score)'],
-                labels=top3_yi['Name'],
-                autopct='%1.1f%%',          # Menampilkan persentase
-                startangle=90,              # Mulai dari atas
-                counterclock=False,         # Urutan searah jarum jam
-            )
-            ax.set_title("Perbandingan Yi Score (Top 3)")
+            top3_yi = result_df.head(3).set_index('Name')[['Yi (Score)']]
+            fig, ax = plt.subplots(figsize=(8, 5))
+            colors = ['#FFD700', '#C0C0C0', '#CD7F32']
+            bars = ax.bar(top3_yi.index, top3_yi['Yi (Score)'].values, color=colors[:len(top3_yi)])
+            ax.set_title('Perbandingan Yi Score Top 3')
+            ax.set_ylabel('Yi Score')
+            ax.set_xlabel('Nama Kost')
+            ax.axhline(y=0, color='black', linestyle='-', linewidth=0.5)
+            ax.grid(axis='y', alpha=0.3)
+            
+            # Label
+            for i, (name, score) in enumerate(zip(top3_yi.index, top3_yi['Yi (Score)'].values)):
+                ax.text(i, score, f'{score:.4f}', ha='center', va='bottom' if score > 0 else 'top')
+            
+            plt.xticks(rotation=45, ha='right')
+            plt.tight_layout()
             st.pyplot(fig)
+            plt.close()
 
         
         # Download hasil
@@ -493,7 +500,7 @@ else:
     
     example_data = {
         'Name': ['Kost_A', 'Kost_B', 'Kost_C'],
-        'Price': [1500000, 2000000, 1800000],
+        'Price': [1800, 900, 2000],
         'Distance': [2.5, 1.0, 3.5],
         'Size': [15, 12, 18],
         'Wifi': [50, 100, 75],
@@ -501,7 +508,18 @@ else:
     }
     example_df = pd.DataFrame(example_data)
     st.dataframe(example_df, use_container_width=True)
-    
+
+    with open("data/dataset_template.csv", "rb") as f:
+        csv = f.read().decode("utf-8")
+    st.download_button(
+        type="primary",
+        label="Download Template Dataset (CSV)",
+        data=csv,
+        file_name="dataset_template.csv",
+        mime="text/csv",
+        use_container_width=True
+    )
+
 
 # Footer
 st.markdown("---")
