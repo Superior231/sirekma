@@ -5,6 +5,9 @@ import seaborn as sns
 import streamlit as st
 import os
 
+# Import fungsi dari calculate.py
+from calculate import calculate_moora, validate_weights, create_result_dataframe
+
 
 # Konfigurasi halaman
 st.set_page_config(page_title="SIREKMA: Sistem Rekomendasi Kost Mahasiswa", layout="wide")
@@ -165,56 +168,18 @@ if uploaded_file is not None:
         st.sidebar.markdown(f"[{label}]({anchor})", unsafe_allow_html=True)
 
 
-
-# Fungsi untuk menghitung MOORA
-def calculate_moora(df, criteria_type, weights):
-    """
-    Menghitung nilai MOORA
-    criteria_type: dictionary yang menentukan benefit/cost untuk setiap kriteria
-    weights: dictionary bobot untuk setiap kriteria (dalam bentuk desimal, total = 1)
-    """
-    # Ambil kolom kriteria (semua kecuali Name)
-    criteria_cols = [col for col in df.columns if col != 'Name']
-    
-    # Matrix keputusan
-    X = df[criteria_cols].values
-    
-    # Langkah 1: Normalisasi matrix
-    # Menggunakan rumus: xij / sqrt(sum(xij^2))
-    normalized = np.zeros_like(X, dtype=float)
-    for j in range(X.shape[1]):
-        denominator = np.sqrt(np.sum(X[:, j] ** 2))
-        normalized[:, j] = X[:, j] / denominator
-    
-    # Langkah 2: Kalikan dengan bobot
-    weighted_normalized = np.zeros_like(normalized)
-    for j, col in enumerate(criteria_cols):
-        weighted_normalized[:, j] = normalized[:, j] * weights[col]
-    
-    # Langkah 3: Optimasi atribut
-    # Pisahkan benefit dan cost criteria
-    benefit_indices = [i for i, col in enumerate(criteria_cols) if criteria_type[col] == 'benefit']
-    cost_indices = [i for i, col in enumerate(criteria_cols) if criteria_type[col] == 'cost']
-    
-    # Hitung Yi = sum(benefit) - sum(cost)
-    yi_values = np.zeros(X.shape[0])
-    
-    # Sum benefit criteria
-    if benefit_indices:
-        yi_values += np.sum(weighted_normalized[:, benefit_indices], axis=1)
-    
-    # Subtract cost criteria
-    if cost_indices:
-        yi_values -= np.sum(weighted_normalized[:, cost_indices], axis=1)
-    
-    return normalized, weighted_normalized, yi_values
-
 # Main content
 if uploaded_file is not None:
     # Baca file CSV
-    df = pd.read_csv(uploaded_file)
-    
-    st.success("✅ Dataset berhasil diupload!")
+    try:
+        df = pd.read_csv(uploaded_file)
+        st.success("✅ Dataset berhasil diupload!")
+    except pd.errors.EmptyDataError:
+        st.error("❌ File CSV kosong atau tidak memiliki kolom!")
+        st.stop()
+    except Exception as e:
+        st.error(f"❌ Terjadi kesalahan saat membaca file: {e}")
+        st.stop()
     
     # Tampilkan dataset
     st.subheader("📊 Dataset Kost Mahasiswa")
@@ -350,147 +315,150 @@ if uploaded_file is not None:
         # Konversi bobot ke desimal (0-1)
         weights_decimal = {k: v/100 for k, v in weights.items()}
         
-        # Hitung MOORA
-        normalized_matrix, weighted_normalized, yi_values = calculate_moora(df, criteria_type, weights_decimal)
-        
-        # Buat dataframe hasil
-        result_df = df.copy()
-        result_df['Yi (Score)'] = yi_values
-        result_df['Ranking'] = result_df['Yi (Score)'].rank(ascending=False, method='min').astype(int)
-        result_df = result_df.sort_values('Ranking')
-        
-        # Tampilkan hasil
-        st.markdown("---")
-        st.markdown("### 📊 Hasil Perhitungan MOORA")
-        
-        # Tampilkan bobot yang digunakan
-        with st.expander("🔍 Lihat Bobot yang Digunakan"):
-            weight_df = pd.DataFrame({
-                'Kriteria': criteria_cols,
-                'Bobot (%)': [weights[col] for col in criteria_cols],
-                'Tipe': [criteria_type[col] for col in criteria_cols]
-            })
-            st.dataframe(weight_df, use_container_width=True)
-        
-        # Tab untuk hasil
-        tab1, tab2, tab3, tab4 = st.tabs(["🏆 Ranking Akhir", "📋 Matrix Ternormalisasi", "⚖️ Matrix Terbobot", "📊 Visualisasi"])
-        
-        with tab1:
-            st.write("**Hasil Ranking Pemilihan Kost:**")
+        try:
+            # Hitung MOORA menggunakan fungsi dari calculate.py
+            normalized_matrix, weighted_normalized, yi_values = calculate_moora(df, criteria_type, weights_decimal)
             
-            # Styling untuk top 3
-            def highlight_top3(row):
-                color = ''
-                if row['Ranking'] == 1:
-                    color = 'background-color: #FFD700; font-weight: bold; color: #000000;'
-                elif row['Ranking'] == 2:
-                    color = 'background-color: #C0C0C0; font-weight: bold; color: #000000;'
-                elif row['Ranking'] == 3:
-                    color = 'background-color: #CD7F32; font-weight: bold; color: #000000;'
-                return [color] * len(row)
+            # Buat dataframe hasil
+            result_df = create_result_dataframe(df, yi_values)
             
-            styled_df = result_df.style.apply(highlight_top3, axis=1)
-            st.dataframe(styled_df, use_container_width=True)
+            # Tampilkan hasil
+            st.markdown("---")
+            st.markdown("### 📊 Hasil Perhitungan MOORA")
             
-            # Tampilkan top 3
-            st.markdown("### 🥇 Top 3 Rekomendasi Kost")
-            top3 = result_df.head(3)
+            # Tampilkan bobot yang digunakan
+            with st.expander("🔍 Lihat Bobot yang Digunakan"):
+                weight_df = pd.DataFrame({
+                    'Kriteria': criteria_cols,
+                    'Bobot (%)': [weights[col] for col in criteria_cols],
+                    'Tipe': [criteria_type[col] for col in criteria_cols]
+                })
+                st.dataframe(weight_df, use_container_width=True)
             
-            cols = st.columns(3)
-            medals = ["🥇", "🥈", "🥉"]
-            for i, (idx, row) in enumerate(top3.iterrows()):
-                with cols[i]:
-                    st.info(f"""
-                    **{medals[i]} Ranking {row['Ranking']}**
-                    
-                    **{row['Name']}**
-                    
-                    - 💰 Harga: Rp{row['Price']:,.0f}k
-                    - 🚶‍♂️ Jarak: {row['Distance']} km
-                    - 📏 Ukuran: {row['Size']} m²
-                    - 🛜 WiFi: {row['Wifi']} Mbps
-                    - 🛡️ Keamanan: {row['Security_Score']}/10
-                    
-                    **Yi Score: {row['Yi (Score)']:.4f}**
-                    """)
-        
-        with tab2:
-            st.write("**Matrix Keputusan Ternormalisasi:**")
-            normalized_df = pd.DataFrame(
-                normalized_matrix,
-                columns=criteria_cols,
-                index=df['Name']
-            )
-            st.dataframe(normalized_df.style.format("{:.4f}"), use_container_width=True)
+            # Tab untuk hasil
+            tab1, tab2, tab3, tab4 = st.tabs(["🏆 Ranking Akhir", "📋 Matrix Ternormalisasi", "⚖️ Matrix Terbobot", "📊 Visualisasi"])
             
-            st.info("""
-            **Catatan:** 
-            - Matrix ternormalisasi menggunakan rumus: xij / √(Σxij²)
-            - Setiap nilai dinormalisasi terhadap akar kuadrat dari jumlah kuadrat kolom
-            """)
-        
-        with tab3:
-            st.write("**Matrix Ternormalisasi Terbobot:**")
-            weighted_df = pd.DataFrame(
-                weighted_normalized,
-                columns=criteria_cols,
-                index=df['Name']
-            )
-            st.dataframe(weighted_df.style.format("{:.4f}"), use_container_width=True)
+            with tab1:
+                st.write("**Hasil Ranking Pemilihan Kost:**")
+                
+                # Styling untuk top 3
+                def highlight_top3(row):
+                    color = ''
+                    if row['Ranking'] == 1:
+                        color = 'background-color: #FFD700; font-weight: bold; color: #000000;'
+                    elif row['Ranking'] == 2:
+                        color = 'background-color: #C0C0C0; font-weight: bold; color: #000000;'
+                    elif row['Ranking'] == 3:
+                        color = 'background-color: #CD7F32; font-weight: bold; color: #000000;'
+                    return [color] * len(row)
+                
+                styled_df = result_df.style.apply(highlight_top3, axis=1)
+                st.dataframe(styled_df, use_container_width=True)
+                
+                # Tampilkan top 3
+                st.markdown("### 🥇 Top 3 Rekomendasi Kost")
+                top3 = result_df.head(3)
+                
+                cols = st.columns(3)
+                medals = ["🥇", "🥈", "🥉"]
+                for i, (idx, row) in enumerate(top3.iterrows()):
+                    with cols[i]:
+                        st.info(f"""
+                        **{medals[i]} Ranking {row['Ranking']}**
+                        
+                        **{row['Name']}**
+                        
+                        - 💰 Harga: Rp{row['Price']:,.0f}k
+                        - 🚶‍♂️ Jarak: {row['Distance']} km
+                        - 📏 Ukuran: {row['Size']} m²
+                        - 🛜 WiFi: {row['Wifi']} Mbps
+                        - 🛡️ Keamanan: {row['Security_Score']}/10
+                        
+                        **Yi Score: {row['Yi (Score)']:.4f}**
+                        """)
             
-            st.info("""
-            **Catatan:** 
-            - Matrix terbobot = Matrix ternormalisasi × Bobot kriteria
-            - Bobot mempengaruhi kontribusi setiap kriteria terhadap score akhir
-            """)
-        
-        with tab4:
-            st.write("**Grafik Perbandingan Yi Score:**")
-            chart_data = result_df.set_index('Name')[['Yi (Score)']].sort_values('Yi (Score)', ascending=True)
-            st.bar_chart(chart_data)
-            st.line_chart(chart_data)
+            with tab2:
+                st.write("**Matrix Keputusan Ternormalisasi:**")
+                normalized_df = pd.DataFrame(
+                    normalized_matrix,
+                    columns=criteria_cols,
+                    index=df['Name']
+                )
+                st.dataframe(normalized_df.style.format("{:.4f}"), use_container_width=True)
+                
+                st.info("""
+                **Catatan:** 
+                - Matrix ternormalisasi menggunakan rumus: xij / √(Σxij²)
+                - Setiap nilai dinormalisasi terhadap akar kuadrat dari jumlah kuadrat kolom
+                """)
             
-            st.write("**Distribusi Kriteria Top 3:**")
-            top3_criteria = result_df.head(3).set_index('Name')[criteria_cols]
-            st.line_chart(top3_criteria.T)
+            with tab3:
+                st.write("**Matrix Ternormalisasi Terbobot:**")
+                weighted_df = pd.DataFrame(
+                    weighted_normalized,
+                    columns=criteria_cols,
+                    index=df['Name']
+                )
+                st.dataframe(weighted_df.style.format("{:.4f}"), use_container_width=True)
+                
+                st.info("""
+                **Catatan:** 
+                - Matrix terbobot = Matrix ternormalisasi × Bobot kriteria
+                - Bobot mempengaruhi kontribusi setiap kriteria terhadap score akhir
+                """)
             
-            st.write("**Perbandingan Yi Score Top 3:**")
-            top3_yi = result_df.head(3).set_index('Name')[['Yi (Score)']]
-            fig, ax = plt.subplots(figsize=(8, 5))
-            colors = ['#FFD700', '#C0C0C0', '#CD7F32']
-            bars = ax.bar(top3_yi.index, top3_yi['Yi (Score)'].values, color=colors[:len(top3_yi)])
-            ax.set_title('Perbandingan Yi Score Top 3')
-            ax.set_ylabel('Yi Score')
-            ax.set_xlabel('Nama Kost')
-            ax.axhline(y=0, color='black', linestyle='-', linewidth=0.5)
-            ax.grid(axis='y', alpha=0.3)
-            
-            # Label
-            for i, (name, score) in enumerate(zip(top3_yi.index, top3_yi['Yi (Score)'].values)):
-                ax.text(i, score, f'{score:.4f}', ha='center', va='bottom' if score > 0 else 'top')
-            
-            plt.xticks(rotation=45, ha='right')
-            plt.tight_layout()
-            st.pyplot(fig)
-            plt.close()
+            with tab4:
+                st.write("**Grafik Perbandingan Yi Score:**")
+                chart_data = result_df.set_index('Name')[['Yi (Score)']].sort_values('Yi (Score)', ascending=True)
+                st.bar_chart(chart_data)
+                st.line_chart(chart_data)
+                
+                st.write("**Distribusi Kriteria Top 3:**")
+                top3_criteria = result_df.head(3).set_index('Name')[criteria_cols]
+                st.line_chart(top3_criteria.T)
+                
+                st.write("**Perbandingan Yi Score Top 3:**")
+                top3_yi = result_df.head(3).set_index('Name')[['Yi (Score)']]
+                fig, ax = plt.subplots(figsize=(8, 5))
+                colors = ['#FFD700', '#C0C0C0', '#CD7F32']
+                bars = ax.bar(top3_yi.index, top3_yi['Yi (Score)'].values, color=colors[:len(top3_yi)])
+                ax.set_title('Perbandingan Yi Score Top 3')
+                ax.set_ylabel('Yi Score')
+                ax.set_xlabel('Nama Kost')
+                ax.axhline(y=0, color='black', linestyle='-', linewidth=0.5)
+                ax.grid(axis='y', alpha=0.3)
+                
+                # Label
+                for i, (name, score) in enumerate(zip(top3_yi.index, top3_yi['Yi (Score)'].values)):
+                    ax.text(i, score, f'{score:.4f}', ha='center', va='bottom' if score > 0 else 'top')
+                
+                plt.xticks(rotation=45, ha='right')
+                plt.tight_layout()
+                st.pyplot(fig)
+                plt.close()
 
+            
+            # Download hasil
+            st.markdown("---")
+            st.markdown("### <i class='bx bxs-download'></i> Download Hasil", unsafe_allow_html=True)
+            
+            # Tambahkan info bobot ke hasil
+            result_with_weights = result_df.copy()
+            
+            csv = result_with_weights.to_csv(index=False)
+            st.download_button(
+                type="primary",
+                label="Download Hasil Ranking (CSV)",
+                data=csv,
+                file_name="hasil_rekomendasi_kost.csv",
+                mime="text/csv",
+                use_container_width=True
+            )
         
-        # Download hasil
-        st.markdown("---")
-        st.markdown("### <i class='bx bxs-download'></i> Download Hasil", unsafe_allow_html=True)
-        
-        # Tambahkan info bobot ke hasil
-        result_with_weights = result_df.copy()
-        
-        csv = result_with_weights.to_csv(index=False)
-        st.download_button(
-            type="primary",
-            label="Download Hasil Ranking (CSV)",
-            data=csv,
-            file_name="hasil_rekomendasi_kost.csv",
-            mime="text/csv",
-            use_container_width=True
-        )
+        except ValueError as e:
+            st.error(f"❌ {str(e)}")
+        except Exception as e:
+            st.error(f"❌ Terjadi kesalahan dalam perhitungan: {str(e)}")
 
 else:
     # Tampilan awal jika belum upload file
@@ -510,16 +478,17 @@ else:
     example_df = pd.DataFrame(example_data)
     st.dataframe(example_df, use_container_width=True)
 
-    with open("data/dataset_template.csv", "rb") as f:
-        csv = f.read().decode("utf-8")
-    st.download_button(
-        type="primary",
-        label="Download Template Dataset (CSV)",
-        data=csv,
-        file_name="dataset_template.csv",
-        mime="text/csv",
-        use_container_width=True
-    )
+    if os.path.exists("data/dataset_template.csv"):
+        with open("data/dataset_template.csv", "rb") as f:
+            csv = f.read().decode("utf-8")
+        st.download_button(
+            type="primary",
+            label="Download Template Dataset (CSV)",
+            data=csv,
+            file_name="dataset_template.csv",
+            mime="text/csv",
+            use_container_width=True
+        )
 
 
 # Footer
